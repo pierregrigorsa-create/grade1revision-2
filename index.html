@@ -190,10 +190,10 @@ body{
 <div class="float-deco" style="top:35%;right:12%;animation-delay:10s">🏆</div>
 
 <!-- Speech status indicator -->
-<div id="speechStatus">🔊 Miss Numby praat...</div>
+<div id="speechStatus" id="speechStatus">🔊 Miss Numby is talking...</div>
 
 <!-- Skip button for Android -->
-<button id="skipBtn" onclick="skipSpeech()">Volgende ➡️</button>
+<button id="skipBtn" onclick="skipSpeech()">Next ➡️</button>
 
 <div id="passwordScreen">
   <div class="pw-card">
@@ -368,18 +368,33 @@ function skipSpeech(){
   document.getElementById('speechStatus').style.display = 'none';
 }
 
+// Detect Android — Web Speech API is unreliable on Android Chrome
+const isAndroid = /android/i.test(navigator.userAgent);
+
 function speak(text, rate=0.85){
   return new Promise(resolve => {
+
+    // On Android, skip speech entirely — text is already shown in the bubble
+    if(isAndroid){
+      // Just wait a moment so the child can read, then move on
+      currentSpeechResolve = resolve;
+      const readTime = Math.min(Math.max(text.length * 60, 2000), 6000);
+      const timer = setTimeout(() => {
+        if(currentSpeechResolve){
+          const r = currentSpeechResolve;
+          currentSpeechResolve = null;
+          r();
+        }
+      }, readTime);
+      return;
+    }
+
     speechSynthesis.cancel();
-
-    // Store resolve so skip button can trigger it
     currentSpeechResolve = resolve;
-
-    // Show status indicator
     const statusEl = document.getElementById('speechStatus');
     statusEl.style.display = 'block';
 
-    // ANDROID SAFETY: auto-resolve after 12 seconds no matter what
+    // Safety timeout — if speech hangs for more than 12 seconds, move on
     const safetyTimer = setTimeout(() => {
       speechSynthesis.cancel();
       statusEl.style.display = 'none';
@@ -397,7 +412,6 @@ function speak(text, rate=0.85){
       u.pitch = 1.15;
       u.volume = 1;
 
-      // Android keep-alive: pause/resume every 5 seconds
       const keepAlive = setInterval(() => {
         if(!speechSynthesis.speaking){clearInterval(keepAlive);return;}
         speechSynthesis.pause();
